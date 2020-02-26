@@ -3,6 +3,7 @@
 #include <Arduino_MKRTHERM.h>
 #include <WiFiNINA.h>
 #include <RTCZero.h>
+#include <ArduinoJson.h>
 
 #include "arduino_secrets.h"
 // initialize the library by associating any needed LCD interface pin
@@ -34,6 +35,9 @@ const byte year = 15;
 
 float thermoCouple = 0.0;
 
+StaticJsonDocument<200> doc;
+char output[128];
+  
 void setup() {
   analogWrite(A3, 50); // Set the brightness to its maximum value
   // set up the LCD's number of columns and rows:
@@ -79,6 +83,9 @@ void setup() {
 
   server.begin();                           // start the web server on port 80
   wifiStatus();                        // you're connected now, so print out the status
+
+
+
 
   rtc.begin();
 
@@ -134,8 +141,9 @@ void newWifiClient(WiFiClient client, float thermoCouple )
           client.println("Content-type:text/html");
           client.println("Connection: close");  // the connection will be closed after completion of the response
           client.println();
-          client.print("T: ");
-          client.print(thermoCouple);
+          //client.print("T: ");
+          //client.print(thermoCouple);
+          client.print(output);
           // The HTTP response ends with another blank line:
           //client.println();
           // break out of the while loop:
@@ -168,11 +176,21 @@ void readThermocouple()
   lcd.print("T: ");
   lcd.print(thermoCouple);
   lcd.print(" C");
+
+  doc["temp"] = thermoCouple;
+  doc["rpm"] = 0.0;
+  
+  serializeJson(doc, output);
 }
 
 void alarmMatch()
 {
+  
   byte newAlarm = rtc.getSeconds();
+  byte hours = rtc.getHours();
+  byte minutes = rtc.getHours();
+  String dateTime = "";
+  dateTime = String(hours)+String(minutes)+String(newAlarm);
   if (newAlarm >= 59)
   {
     newAlarm = 0;
@@ -180,13 +198,15 @@ void alarmMatch()
   rtc.setAlarmSeconds(newAlarm);
   lcd.clear();
 
-  print2digits(rtc.getHours());
+  print2digits(hours);
   lcd.print(":");
-  print2digits(rtc.getMinutes());
+  print2digits(minutes);
   lcd.print(":");
   print2digits(rtc.getSeconds());
 
   lcd.setCursor(0, 1);
+  
+  doc["time"] = dateTime;
   readThermocouple();
 }
 
