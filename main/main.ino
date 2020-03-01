@@ -4,6 +4,7 @@
 #include <WiFiNINA.h>
 #include <RTCZero.h>
 #include <ArduinoJson.h>
+#include <CircularBuffer.h>
 
 #include "arduino_secrets.h"
 
@@ -53,9 +54,14 @@ int rpm = 0;
 /*** ARRAY VALUES ***/
 int ArrayIndex;
 
-int   RtcTimeArray[ARRAY_SIZE];
+//int   RtcTimeArray[ARRAY_SIZE];
 float ThermoCoupleArray[ARRAY_SIZE];
 int   RpmArray[ARRAY_SIZE];
+
+//*** CIRCULAR BUFFER***/
+CircularBuffer<int, 10> TimeCircularBuffer;      
+CircularBuffer<float, 10> TempCircularBuffer;    
+CircularBuffer<int, 10> RpmCircularBuffer;      
 
 /***JSON***/
 const int capacity = JSON_ARRAY_SIZE(ARRAY_SIZE) + 10 * JSON_OBJECT_SIZE(3);
@@ -244,7 +250,7 @@ void putDataInJson()
 {
   for (int i = 0 ; i < ARRAY_SIZE; i++)
   {
-    jsonObject[i]["time"] = RtcTimeArray[i];
+    jsonObject[i]["time"] = TimeCircularBuffer[i];
     jsonObject[i]["temp"] = ThermoCoupleArray[i];
     jsonObject[i]["rpm"] = RpmArray[i];
   }
@@ -272,7 +278,6 @@ void saveRpm()
 void saveThermocouple()
 {
   ThermoCoupleArray[ArrayIndex] = thermoCouple;
-  RpmArray[ArrayIndex] = 0.0;
 
   lcd.setCursor(0, 1);
   lcd.print("T:");
@@ -282,14 +287,17 @@ void saveThermocouple()
 void saveTime()
 {
   rtcTime = getRtcTime(hours, minutes, seconds);
-  RtcTimeArray[ArrayIndex] = rtcTime;
+  if (TimeCircularBuffer.isFull())
+  {
+    TimeCircularBuffer.shift();
+  }
+  TimeCircularBuffer.push(rtcTime);
 
   lcd.clear();
-  lcd.print(RtcTimeArray[ArrayIndex]);
+  lcd.print(TimeCircularBuffer[ArrayIndex]);
   lcd.print(",");
   lcd.print(ArrayIndex);
 }
-
 
 int getRtcTime(int hours, int minutes, int seconds)
 {
