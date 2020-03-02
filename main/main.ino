@@ -51,20 +51,13 @@ int rtcTime = 0;
 float thermoCouple = 0.0;
 int rpm = 0;
 
-/*** ARRAY VALUES ***/
-int ArrayIndex;
-
-//int   RtcTimeArray[ARRAY_SIZE];
-float ThermoCoupleArray[ARRAY_SIZE];
-int   RpmArray[ARRAY_SIZE];
-
 //*** CIRCULAR BUFFER***/
-CircularBuffer<int, 10> TimeCircularBuffer;      
-CircularBuffer<float, 10> TempCircularBuffer;    
-CircularBuffer<int, 10> RpmCircularBuffer;      
+CircularBuffer<int, ARRAY_SIZE> TimeCircularBuffer;      
+CircularBuffer<float, ARRAY_SIZE> TempCircularBuffer;    
+CircularBuffer<int, ARRAY_SIZE> RpmCircularBuffer;      
 
 /***JSON***/
-const int capacity = JSON_ARRAY_SIZE(ARRAY_SIZE) + 10 * JSON_OBJECT_SIZE(3);
+const int capacity = JSON_ARRAY_SIZE(ARRAY_SIZE) + ARRAY_SIZE * JSON_OBJECT_SIZE(3);
 DynamicJsonDocument doc(capacity);
 JsonObject jsonObject[ARRAY_SIZE];
 
@@ -143,8 +136,6 @@ void setup() {
   rtc.enableAlarm(rtc.MATCH_SS);
   rtc.attachInterrupt(alarmMatch);
 
-  /***ARRAY SAMPLES**/
-  ArrayIndex = 0;
 }
 void loop() {
   //*** THERMO ***//
@@ -153,14 +144,9 @@ void loop() {
   if (rtcAlarm)
   {
     rtcAlarm = false;
-    if (ArrayIndex >= ARRAY_SIZE)
-    {
-      ArrayIndex = 0;
-    }
     saveTime();
     saveThermocouple();
     saveRpm();
-    ArrayIndex += 1;
 
   }
 
@@ -205,6 +191,8 @@ void newWifiClient(WiFiClient client)
   lcd.print("new client");
   String currentLine = "";                // make a String to hold incoming data from the client
   while (client.connected()) {            // loop while the client's connected
+    lcd.clear();
+    lcd.print("connected");
     if (client.available()) {             // if there's bytes to read from the client,
       char c = client.read();             // read a byte, then
       if (c == '\n') {                    // if the byte is a newline character
@@ -234,8 +222,16 @@ void newWifiClient(WiFiClient client)
   }
   // close the connection:
   client.stop();
+  client.flush();
   lcd.clear();
   lcd.print("disconnected");
+}
+
+void clearCircularBuffer()
+{
+  TimeCircularBuffer.clear();     
+  TempCircularBuffer.clear(); 
+  RpmCircularBuffer.clear();
 }
 
 void createJsonDoc()
@@ -248,11 +244,11 @@ void createJsonDoc()
 
 void putDataInJson()
 {
-  for (int i = 0 ; i < ARRAY_SIZE; i++)
+  for (int i = 0 ; i < TimeCircularBuffer.size(); i++)
   {
     jsonObject[i]["time"] = TimeCircularBuffer[i];
-    jsonObject[i]["temp"] = ThermoCoupleArray[i];
-    jsonObject[i]["rpm"] = RpmArray[i];
+    jsonObject[i]["temp"] = TempCircularBuffer[i];
+    jsonObject[i]["rpm"] = RpmCircularBuffer[i];
   }
 }
 
@@ -269,19 +265,27 @@ void alarmMatch()
 
 void saveRpm()
 {
-  RpmArray[ArrayIndex] = 0.0;
+  if (RpmCircularBuffer.isFull())
+  {
+    RpmCircularBuffer.shift();
+  }
+  RpmCircularBuffer.push(99999);
 
   lcd.print("R:");
-  lcd.print(RpmArray[ArrayIndex]);
+  lcd.print(RpmCircularBuffer.last());
 }
 
 void saveThermocouple()
 {
-  ThermoCoupleArray[ArrayIndex] = thermoCouple;
+  if (TempCircularBuffer.isFull())
+  {
+    TempCircularBuffer.shift();
+  }
+  TempCircularBuffer.push(thermoCouple);
 
   lcd.setCursor(0, 1);
   lcd.print("T:");
-  lcd.print(ThermoCoupleArray[ArrayIndex]);
+  lcd.print(TempCircularBuffer.last());
 }
 
 void saveTime()
@@ -294,9 +298,7 @@ void saveTime()
   TimeCircularBuffer.push(rtcTime);
 
   lcd.clear();
-  lcd.print(TimeCircularBuffer[ArrayIndex]);
-  lcd.print(",");
-  lcd.print(ArrayIndex);
+  lcd.print(TimeCircularBuffer.last());
 }
 
 int getRtcTime(int hours, int minutes, int seconds)
