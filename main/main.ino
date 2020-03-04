@@ -61,6 +61,16 @@ const int capacity = JSON_ARRAY_SIZE(ARRAY_SIZE) + ARRAY_SIZE * JSON_OBJECT_SIZE
 DynamicJsonDocument doc(capacity);
 JsonObject jsonObject[ARRAY_SIZE];
 
+/***RPM***/
+const byte pwm = 6;
+const byte interruptPin = 7;
+int pulse = 0;
+unsigned long timePrec;
+unsigned long timeNow;
+const unsigned long deltaTime = 100000;
+bool switchTimer;
+int deltaNow = 0;
+
 void setup() {
   //*** LCD ***//
   analogWrite(A3, 50); // Set the brightness to its maximum value
@@ -128,6 +138,14 @@ void setup() {
   //***JSON***//
   createJsonDoc();
 
+  //*** RPM ***//
+  pinMode(pwm, OUTPUT);
+  pinMode(interruptPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), spike, RISING );
+  analogWrite(pwm, 64);
+  switchTimer = false;
+  timePrec = micros();
+
   //*** RTC ***//
   rtc.begin();
   rtc.setTime(StartHours, StartMinutes, StartSeconds);
@@ -136,10 +154,21 @@ void setup() {
   rtc.enableAlarm(rtc.MATCH_SS);
   rtc.attachInterrupt(alarmMatch);
 
+  ///**sERIAL**///
+  Serial.begin(9600);
 }
 void loop() {
   //*** THERMO ***//
   thermoCouple = THERM.readTemperature();
+  
+  timeNow = micros();
+  deltaNow = timeNow - timePrec;
+  if ( deltaNow >= deltaTime)
+  {
+    rpm = pulse * 10 *60;
+    pulse = 0;
+    timePrec = timeNow;
+     }
 
   if (rtcAlarm)
   {
@@ -172,6 +201,11 @@ void loop() {
     putDataInJson();
     newWifiClient(client);
   }
+}
+
+
+void spike() {
+  pulse++;
 }
 
 void wifiStatus() {
@@ -269,7 +303,7 @@ void saveRpm()
   {
     RpmCircularBuffer.shift();
   }
-  RpmCircularBuffer.push(99999);
+  RpmCircularBuffer.push(rpm);
 
   lcd.print("R:");
   lcd.print(RpmCircularBuffer.last());
